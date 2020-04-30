@@ -102,7 +102,7 @@ def sefm_select(layout, subject, sessions, base_temp_dir, fsl_dir, mre_dir,
     try:
         len(list_pos) == len(list_neg)
     except:
-        print("Error: There are a mismatched number of SEFMs. This should never happen!")
+        print("ERROR in SEFM select: There are a mismatched number of SEFMs. This should never happen!")
     
     pairs = []
     for pair in zip(list_pos, list_neg):
@@ -171,8 +171,7 @@ def sefm_select(layout, subject, sessions, base_temp_dir, fsl_dir, mre_dir,
         else:
             insert_edit_json(pos_json, "IntendedFor", [])
             insert_edit_json(neg_json, "IntendedFor", [])
-        
-            
+    
     # Delete the temp directory containing all the intermediate images
     if not debug:
         rm_cmd = ['rm', '-rf', temp_dir]
@@ -225,14 +224,17 @@ def seperate_concatenated_fm(bids_layout, subject, session, fsl_dir):
             # add required fields to the orig json as well
             insert_edit_json(orig_json, 'IntendedFor', [])
     return
+    
 
 def insert_edit_json(json_path, json_field, value):
-    with open(json_path, 'r+') as f:
+    with open(json_path, 'r') as f:
         data = json.load(f)
-        data[json_field] = value
-        f.seek(0)
+    if json_field in data and data[json_field] != value:
+        print('WARNING: Replacing {}: {} with {} in {}'.format(json_field, data[json_field], value, json_path))
+    data[json_field] = value
+    with open(json_path, 'w') as f:    
         json.dump(data, f, indent=4)
-        f.truncate
+
     return
         
 

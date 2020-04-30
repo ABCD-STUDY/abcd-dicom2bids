@@ -52,10 +52,12 @@ NDA_AWS_TOKEN_MAKER = os.path.join(PWD, "src", "nda_aws_token_maker.py")
 SERIES_TABLE_PARSER = os.path.join(PWD, "src", "good_bad_series_parser.py")
 SPREADSHEET_DOWNLOAD = os.path.join(PWD, "spreadsheets",
                                     "ABCD_good_and_bad_series_table.csv")
+
 SPREADSHEET_QC = os.path.join(PWD, "spreadsheets", "abcd_fastqc01.txt")
 TEMP_FILES_DIR = os.path.join(PWD, "temp")
 UNPACK_AND_SETUP = os.path.join(PWD, "src", "unpack_and_setup.sh")
 UNPACKED_FOLDER = os.path.join(PWD, "data")
+MODALITIES = ['anat', 'func', 'dwi']
 
 
 def main():
@@ -196,6 +198,30 @@ def get_cli_args():
               "spreadsheet.".format(SPREADSHEET_QC))
     )
 
+    # Optional: Subject list
+    parser.add_argument(
+        "-l",
+        "--subject-list",
+        dest="subject_list",
+        type=validate_readable_file,
+        required=True,
+        help=("Path to a .txt file containing a list of subjects to download. "
+              "The default is to download all available subjects.")
+    )
+
+    # Optional: Modalities
+    parser.add_argument(
+        "-m",
+        "--modalities",
+        choices=MODALITIES,
+        nargs="+",
+        dest="modalities",
+        default=MODALITIES,
+        help=("List of the imaging modalities that should be downloaded for "
+             "each subject. The default is to download all modalities. "
+             "The possible selections are {}".format(MODALITIES))
+)    
+
     # Optional: During unpack_and_setup, remove unprocessed data
     parser.add_argument(
         "-rm",
@@ -241,6 +267,17 @@ def get_cli_args():
               "file exists with the user's NDA credentials, the user will be "
               "prompted for them. If this is added and --password is not, "
               "then the user will be prompted for their NDA password.")
+    )
+
+    parser.add_argument(
+        "-z",
+        "--docker-cmd",
+        type=str,
+        dest="docker_cmd",
+        default=None,
+        help=("A necessary docker command replacement on HPCs like "
+              "the one at OHSU, which has it's own special wrapper for"
+              "docker for security reasons. Example: '/opt/acc/sbin/exadocker'")
     )
 
     # Parse, validate, and return all CLI args
@@ -573,8 +610,12 @@ def download_nda_data(cli_args):
     with downloaded NDA data.
     :return: N/A
     """
-    subprocess.check_call(("python3", SERIES_TABLE_PARSER, cli_args.download, 
-                           SPREADSHEET_DOWNLOAD))
+    subprocess.check_call(("python3", "--version"))
+    subprocess.check_call(("python3", 
+                            SERIES_TABLE_PARSER,
+                            "--download-dir", cli_args.download, 
+                            "--subject-list", cli_args.subject_list,
+                            "--modalities", ','.join(cli_args.modalities)))
 
 
 def unpack_and_setup(cli_args):
@@ -655,9 +696,14 @@ def validate_bids(cli_args):
     :return: N/A
     """
     try:
-        subprocess.check_call(("docker", "run", "-ti", "--rm", "-v",
-                               cli_args.output + ":/data:ro", "bids/validator",
-                               "/data"))
+        if cli_args.docker_cmd:
+            subprocess.check_call(('sudo', cli_args.docker_cmd, "run", "-ti", "--rm", "-v",
+                                   cli_args.output + ":/data:ro", "bids/validator",
+                                   "/data"))
+        else:    
+            subprocess.check_call(("docker", "run", "-ti", "--rm", "-v",
+                                   cli_args.output + ":/data:ro", "bids/validator",
+                                   "/data"))
     except subprocess.CalledProcessError:
         print("Error: BIDS validation failed.")
 
