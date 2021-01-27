@@ -2,7 +2,7 @@
 
 Written by the OHSU ABCD site for selectively downloading ABCD Study imaging DICOM data QC'ed as good by the ABCD DAIC site, converting it to BIDS standard input data, selecting the best pair of spin echo field maps, and correcting the sidecar JSON files to meet the BIDS Validator specification.
 
-*Note: DWI has been added to the list of modalities that can be downloaded. This has resulted in a couple important changes to the scripts included here and the output BIDS data. Most notabaly fieldmaps now include an acquisition field in their filenames to differentiate those used for functional images and those used for DWI (e.g. ..._acq-func_... or ..._acq-dwi_...). Data uploaded to [Collection 3165](https://github.com/ABCD-STUDY/nda-abcd-collection-3165), which was created using this repository, does not contain this identifier.*
+*Note: DWI has been added to the list of modalities that can be downloaded. This has resulted in a couple important changes to the scripts included here and the output BIDS data. Most notably, fieldmaps now include an acquisition field in their filenames to differentiate those used for functional images and those used for DWI (e.g. ..._acq-func_... or ..._acq-dwi_...). Data uploaded to [Collection 3165](https://github.com/ABCD-STUDY/nda-abcd-collection-3165), which was created using this repository, does not contain this identifier.*
 
 ## Installation
 
@@ -11,6 +11,7 @@ Clone this repository and save it somewhere on the Linux system you want to do A
 ## Dependencies
 
 1. [Python 3.5.2](https://www.python.org/downloads/release/python-352/)
+1. [jq](https://stedolan.github.io/jq/download/) version 1.6 or higher
 1. [MathWorks MATLAB Runtime Environment (MRE) version 9.1 (R2016b)](https://www.mathworks.com/products/compiler/matlab-runtime.html)
 1. [cbedetti Dcm2Bids](https://github.com/cbedetti/Dcm2Bids) (`export` into your BASH `PATH` variable)
 1. [Rorden Lab dcm2niix](https://github.com/rordenlab/dcm2niix) (`export` into your BASH `PATH` variable)
@@ -21,6 +22,19 @@ Clone this repository and save it somewhere on the Linux system you want to do A
 1. Python [`cryptography` package](https://cryptography.io/en/latest/)
 1. Python [`pandas` package](https://pandas.pydata.org)
 1. [AWS CLI (Amazon Web Services Command Line Interface) v19.0.0](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
+
+We recommend creating a virtual environment for Python by running:
+
+```
+python3 -m venv env
+source env/bin/activate
+```
+
+Then install the specified versions of all required python packages by running:
+
+```
+pip install -r src/requirements.txt
+```
 
 ## Spreadsheet (not included)
 
@@ -56,7 +70,7 @@ To download images for ABCD you must have the `abcd_fastqc01.csv` spreadsheet do
 
 The DICOM to BIDS process can be done by running the `abcd2bids.py` wrapper from within the directory cloned from this repo. `abcd2bids.py` requires two positional arguments and can take several optional arguments. Those positional arguments are file paths to the FSL directory and the MATLAB Runtime Environment. Here is an example of a valid call of this wrapper:
 
-```
+```sh
 python3 abcd2bids.py <FSL directory> <Matlab2016bRuntime v9.1 compiler runtime directory>
 ```
 
@@ -80,6 +94,8 @@ This wrapper will create a temporary folder (`temp/` by default) with hundreds o
 
 `--subject-list`: By default, all subjects will be downloaded and converted. If only a subset of subjects are desired then specify a path to a .txt file containing a list of subjects (each on their own line) to download. If none is provided this script will attempt to download and convert every subject, which may take weeks to complete. It is recommended to run in parallel on batches of subjects.
 
+`--sessions`: By default, the wrapper will download all sessions from each subject. This is equivalent to `--sessions ['baseline_year_1_arm_1', '2_year_follow_up_y_arm_1']`. If only a specific year should be download for a subject then specify the year within list format, e.g. `--sessions ['baseline_year_1_arm_1']` for just "year 1" data.
+
 `--modalities`: By default, the wrapper will download all modalities from each subject. This is equivalent to `--modalities ['anat', 'func', 'dwi']`. If only certain modalities should be downloaded for a subject then provide a list, e.g. `--modalities ['anat', 'func']`
 
 `--download`: By default, the wrapper will download the ABCD data to the `raw/` subdirectory of the cloned folder. If the user wants to download the ABCD data to a different directory, they can use the `--download` flag, e.g. `--download ~/abcd-dicom2bids/ABCD-Data-Download`. A folder will be created at the given path if one does not already exist.
@@ -90,14 +106,22 @@ This wrapper will create a temporary folder (`temp/` by default) with hundreds o
 
 `--output`: By default, the wrapper will place the finished/converted data into the `data/` subdirectory of the cloned folder. If the user wants to put the finished data anywhere else, they can do so using the optional `--output` flag followed by the path at which to create the directory, e.g. `--output ~/abcd-dicom2bids/Finished-Data`. A folder will be created at the given path if one does not already exist.
 
-`--start_at`: By default, this wrapper will run every step listed under "Explanation of Process" below. Use this flag to start at one step and skip all of the previous ones. To do so, enter the name of the step, e.g. `--start_at correct_jsons` to skip every step before JSON correction.
+`--start-at`: By default, this wrapper will run every step listed below in that order. Use this flag to start at one step and skip all of the previous ones. To do so, enter the name of the step. E.g. `--start-at correct_jsons` will skip every step before JSON correction.
+
+1. create_good_and_bad_series_table
+2. download_nda_data
+3. unpack_and_setup
+4. correct_jsons
+5. validate_bids
+
+`--stop-before`: To run every step until a specific step, and skip every step after it, use this flag with the name of the first step to skip. E.g. `--stop-before unpack_and_setup` will only run the first two steps.
 
 For more information including the shorthand flags of each option, use the `--help` command: `python3 abcd2bids.py --help`.
 
 Here is the format for a call to the wrapper with more options added:
 
-```
-python3 abcd2bids.py <FSL directory> <Matlab2016bRuntime v9.1 compiler runtime directory> --username <NDA username> --download <Folder to place raw data in> --output <Folder to place converted data in> --temp <Directory to hold temporary files> --remove 
+```sh
+python3 abcd2bids.py <FSL directory> <Matlab2016bRuntime v9.1 compiler runtime directory> --username <NDA username> --download <Folder to place raw data in> --output <Folder to place converted data in> --temp <Directory to hold temporary files> --remove
 ```
 
 ## Explanation of Process
@@ -129,7 +153,7 @@ Once `ABCD_good_and_bad_series_table.csv` is successfully created, the wrapper w
 
 The wrapper will call `unpack_and_setup.sh` in a loop to do the DICOM to BIDS conversion and spin echo field map selection, taking seven arguments:
 
-```
+```sh
 SUB=$1 # Full BIDS formatted subject ID (sub-SUBJECTID)
 VISIT=$2 # Full BIDS formatted session ID (ses-SESSIONID)
 TGZDIR=$3 # Path to directory containing all TGZ files for SUB/VISIT
@@ -178,4 +202,4 @@ This wrapper relies on the following other projects:
 
 ## Meta
 
-Documentation last updated by Greg Conan on 2019-11-06.
+Documentation last updated by Greg Conan on 2020-06-29.

@@ -53,10 +53,8 @@ def generate_parser(parser=None):
     parser.add_argument(
         '-y', 
         '--sessions', 
-        choices=YEARS,
-        nargs='+',
         dest='year_list',
-        default=['baseline_year_1_arm_1'],
+        default=YEARS,
         help='List the years that images should be downloaded from'
 )
     parser.add_argument(
@@ -94,16 +92,18 @@ def main(argv=sys.argv):
         subject_list = [sub.strip() for sub in x]
         log = os.path.join(os.path.dirname(args.subject_list), os.path.splitext(os.path.basename(args.subject_list))[0] + "_download_log.csv")
     year_list = args.year_list
+    if isinstance(year_list, str):
+        year_list = year_list.split(',')
     modalities = args.modalities
     if isinstance(modalities, str):
         modalities = modalities.split(',')
     download_dir = args.download_dir
 
     print("aws_downloader.py command line arguments:")    
-    print("     QC spreadsheet: {}".format(series_csv))
-    print("     Subject List  : {}".format(subject_list))
-    print("     Year          : {}".format(year_list))
-    print("     Modalities    : {}".format(modalities))
+    print("     QC spreadsheet      : {}".format(series_csv))
+    print("     Number of Subjects  : {}".format(len(subject_list)))
+    print("     Year                : {}".format(year_list))
+    print("     Modalities          : {}".format(modalities))
 
     with open(log, 'w') as f:
         writer = csv.writer(f)
@@ -180,6 +180,7 @@ def main(argv=sys.argv):
                         continue
                     else:
                         aws_cmd = ["aws", "s3", "cp", i, tgz_dir + "/", "--profile", "NDA"]
+                        print(aws_cmd)
                         subprocess.call(aws_cmd)
 
 
@@ -285,11 +286,9 @@ def add_func_paths(passed_QC_group, file_paths):
 
 def add_dwi_paths(passed_QC_group, file_paths):
     DTI_df = passed_QC_group.loc[passed_QC_group['image_description'] == 'ABCD-DTI']
-    # There should only be a single DTI run that passes QC. If more than it requires investigation
     if DTI_df.shape[0] >= 1:
         # If a DTI exists then download all passing DTI fieldmaps
         DTI_FM_df = passed_QC_group.loc[passed_QC_group['image_description'] == 'ABCD-Diffusion-FM']
-        DTI_FM_df = DTI_FM_df.tail(1)
         if DTI_FM_df.empty:
             DTI_FM_AP_df = passed_QC_group.loc[passed_QC_group['image_description'] == 'ABCD-Diffusion-FM-AP']
             if DTI_FM_AP_df.empty:
@@ -298,7 +297,7 @@ def add_dwi_paths(passed_QC_group, file_paths):
             DTI_FM_df = DTI_FM_AP_df.tail(1)
             DTI_FM_df = DTI_FM_df.append(DTI_FM_PA_df.tail(1))
         if not DTI_FM_df.empty:
-            for file_path in DTI_df.tail(1)['image_file']:
+            for file_path in DTI_df['image_file']:
                 file_paths += [file_path]
             for file_path in DTI_FM_df['image_file']:
                 file_paths += [file_path]
